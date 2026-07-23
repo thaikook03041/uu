@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+
+<html class="light" lang="th"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>การพัฒนาคลังสินค้าด้วยกล่องบรรจุภัณฑ์รหัสสีและ QR Code</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Noto+Sans+Thai:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#dad9e3",
+                        "surface-bright": "#fbf8ff",
+                        "inverse-on-surface": "#f1f0fa",
+                        "tertiary": "#611e00",
+                        "on-surface-variant": "#444653",
+                        "surface-container-low": "#f4f2fc",
+                        "primary-fixed-dim": "#b8c4ff",
+                        "on-secondary-container": "#54647a",
+                        "on-primary-fixed": "#001453",
+                        "on-tertiary-fixed": "#380d00",
+                        "on-tertiary-fixed-variant": "#802a00",
+                        "primary-fixed": "#dde1ff",
+                        "surface-container-highest": "#e3e1eb",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#d0e1fb",
+                        "on-error-container": "#93000a",
+                        "on-background": "#1a1b22",
+                        "on-primary-fixed-variant": "#173bab",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "inverse-primary": "#b8c4ff",
+                        "background": "#fbf8ff",
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "error": "#ba1a1a",
+                        "inverse-surface": "#2f3037",
+                        "tertiary-container": "#872d00",
+                        "surface-variant": "#e3e1eb",
+                        "on-error": "#ffffff",
+                        "primary": "#00288e",
+                        "surface-tint": "#3755c3",
+                        "outline-variant": "#c4c5d5",
+                        "on-tertiary-container": "#ffa583",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffdbce",
+                        "on-surface": "#1a1b22",
+                        "on-secondary-fixed": "#0b1c30",
+                        "on-primary-container": "#a8b8ff",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#eeedf7",
+                        "surface-container-high": "#e8e7f1",
+                        "secondary-fixed": "#d3e4fe",
+                        "tertiary-fixed-dim": "#ffb59a",
+                        "outline": "#757684",
+                        "secondary": "#505f76",
+                        "surface": "#fbf8ff",
+                        "primary-container": "#1e40af",
+                        "error-container": "#ffdad6"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "xl": "32px",
+                        "base": "4px",
+                        "gutter": "20px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "container-max": "1440px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "title-md": ["Inter", "Noto Sans Thai"],
+                        "body-md": ["Inter", "Noto Sans Thai"],
+                        "body-lg": ["Inter", "Noto Sans Thai"],
+                        "headline-lg-mobile": ["Inter", "Noto Sans Thai"],
+                        "display": ["Inter", "Noto Sans Thai"],
+                        "headline-lg": ["Inter", "Noto Sans Thai"],
+                        "label-sm": ["Inter", "Noto Sans Thai"]
+                    },
+                    "fontSize": {
+                        "title-md": ["18px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "display": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', 'Noto Sans Thai', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .view-transition { transition: opacity 300ms ease-in-out, transform 300ms ease-in-out; }
+        .hidden-view { opacity: 0; transform: translateY(10px); pointer-events: none; position: absolute; width: 100%; }
+        .active-view { opacity: 1; transform: translateY(0); pointer-events: auto; position: relative; }
+        .glass-card { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(8px); }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- TopAppBar -->
+<header class="sticky top-0 z-50 flex justify-between items-center px-lg py-sm w-full bg-surface/95 backdrop-blur-sm border-b border-outline-variant shadow-sm">
+<div class="flex items-center gap-md">
+<img alt="LogisticsFlow Logo" class="w-10 h-10 object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCn3sAAcuR3D02MfwM6qp2qoKZSMOejzqP5IVjDaH2wk8UVXqw9W4hh0a26DxrIxmYrBL5UKOax95tdR0iGwRV8ZC0HYCLV_uFlvLIQhGkXCTgNerNJYNH2j3ju_wfq7UJYWDzWrblszeixb71a35iirEgjU6mCO0vPkvl6Ivsmfe76ALOsmeEZQJCauGlEdoXeBl2MVJMDf4JgxZ71PudRk_c_WSJmGs_ibFcqxkHhCTfJpMAB5MtRMWk0pQzeUaKl68Rz6SL2YMc"/>
+<h1 class="font-display text-display text-primary tracking-tight text-[24px] md:text-[28px]">LogisticsFlow</h1>
+</div>
+<div class="flex items-center gap-md">
+<button class="material-symbols-outlined text-primary p-xs rounded-full hover:bg-surface-container-low transition-colors duration-200">account_circle</button>
+</div>
+</header>
+<main class="max-w-container-max mx-auto px-md md:px-lg py-lg relative overflow-x-hidden">
+<!-- HOME VIEW -->
+<section class="view-transition active-view space-y-xl" id="view-home">
+<div class="text-center md:text-left space-y-md">
+<h2 class="font-headline-lg text-headline-lg text-on-surface leading-tight">
+                    การพัฒนาคลังสินค้าด้วยกล่องบรรจุภัณฑ์รหัสสีและ QR Code
+                </h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                    ระบบบริหารจัดการคลังสินค้าอัจฉริยะที่ใช้เทคโนโลยีการระบุตัวตนด้วยรหัสสีและคิวอาร์โค้ด 
+                    เพื่อเพิ่มประสิทธิภาพในการจัดเก็บ ค้นหา และตรวจสอบสถานะสินค้าแบบเรียลไทม์
+                </p>
+<div class="pt-md">
+<button class="bg-primary text-on-primary px-xl py-md rounded-xl font-title-md text-title-md shadow-md active:scale-95 transition-all duration-200 flex items-center gap-sm mx-auto md:mx-0" onclick="switchView('view-list')">
+<span class="material-symbols-outlined">qr_code_scanner</span>
+                        เริ่มสแกนและตรวจสอบสินค้า
+                    </button>
+</div>
+</div>
+<!-- Stats Board (Bento Style) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div class="bg-surface-container-low p-lg rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary text-[32px]">inventory_2</span>
+<span class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Total Items</span>
+</div>
+<div>
+<div class="font-display text-display text-on-surface">20</div>
+<div class="text-body-md font-body-md text-on-surface-variant">รายการทั้งหมดในระบบ</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-lg rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary text-[32px]">warehouse</span>
+<span class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Storage Slots</span>
+</div>
+<div>
+<div class="font-display text-display text-on-surface">100</div>
+<div class="text-body-md font-body-md text-on-surface-variant">ช่องจัดเก็บว่าง 80/100</div>
+</div>
+</div>
+<div class="bg-surface-container-low p-lg rounded-xl border border-outline-variant shadow-sm flex flex-col justify-between h-40">
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-primary text-[32px]">local_shipping</span>
+<span class="text-label-sm font-label-sm uppercase tracking-widest text-on-surface-variant">Ready to Ship</span>
+</div>
+<div>
+<div class="font-display text-display text-primary">08</div>
+<div class="text-body-md font-body-md text-on-surface-variant">สินค้าพร้อมจัดส่งวันนี้</div>
+</div>
+</div>
+</div>
+</section>
+<!-- PRODUCT LIST VIEW -->
+<section class="view-transition hidden-view space-y-md" id="view-list">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-[48px] pr-md py-sm bg-white border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" id="searchInput" oninput="filterProducts()" placeholder="ค้นหาด้วยรหัสสินค้า หรือ ชื่อสินค้า..." type="text"/>
+</div>
+<div class="flex items-center gap-xs overflow-x-auto pb-xs no-scrollbar">
+<button class="status-tab active-tab px-md py-xs rounded-full bg-primary text-on-primary text-label-sm font-label-sm whitespace-nowrap transition-colors" onclick="filterByStatus('all')">ทั้งหมด</button>
+<button class="status-tab px-md py-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm whitespace-nowrap hover:bg-surface-variant transition-colors" onclick="filterByStatus('รอรับเข้า')">รอรับเข้า</button>
+<button class="status-tab px-md py-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm whitespace-nowrap hover:bg-surface-variant transition-colors" onclick="filterByStatus('จัดเก็บแล้ว')">จัดเก็บแล้ว</button>
+<button class="status-tab px-md py-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm whitespace-nowrap hover:bg-surface-variant transition-colors" onclick="filterByStatus('พร้อมจัดส่ง')">พร้อมจัดส่ง</button>
+<button class="status-tab px-md py-xs rounded-full bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm whitespace-nowrap hover:bg-surface-variant transition-colors" onclick="filterByStatus('ต้องตรวจสอบ')">ต้องตรวจสอบ</button>
+</div>
+</div>
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-md" id="productGrid">
+<!-- Cards injected via JS -->
+</div>
+</section>
+<!-- DETAIL VIEW -->
+<section class="view-transition hidden-view max-w-4xl mx-auto" id="view-detail">
+<div class="bg-white rounded-xl border border-outline-variant shadow-lg overflow-hidden">
+<div class="p-md md:p-lg border-b border-outline-variant flex items-center justify-between bg-surface-container-low">
+<button class="flex items-center gap-xs text-primary font-title-md text-title-md hover:underline" onclick="switchView('view-list')">
+<span class="material-symbols-outlined">arrow_back</span> ย้อนกลับ
+                    </button>
+<span class="px-md py-xs rounded-full text-label-sm font-label-sm" id="detailStatusBadge"></span>
+</div>
+<div class="p-lg grid grid-cols-1 md:grid-cols-2 gap-xl">
+<div class="space-y-lg">
+<div>
+<span class="text-label-sm font-label-sm text-outline uppercase tracking-wider">Product Information</span>
+<h3 class="font-headline-lg text-headline-lg text-on-surface mt-xs" id="detailName">ชื่อสินค้า</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" id="detailId">BX000</p>
+</div>
+<div class="grid grid-cols-2 gap-md pt-md border-t border-outline-variant">
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">หมวดหมู่</p>
+<p class="font-body-lg text-body-lg font-semibold" id="detailCategory">เครื่องดื่ม</p>
+</div>
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">ตำแหน่งจัดเก็บ</p>
+<p class="font-body-lg text-body-lg font-semibold" id="detailLocation">A01</p>
+</div>
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">จำนวน</p>
+<p class="font-body-lg text-body-lg font-semibold" id="detailQty">24</p>
+</div>
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">หน่วย</p>
+<p class="font-body-lg text-body-lg font-semibold" id="detailUnit">แพ็ค</p>
+</div>
+</div>
+<div class="space-y-sm">
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">วันที่ผลิต (MFG)</p>
+<p class="font-body-md text-body-md" id="detailMfg">01/01/2024</p>
+</div>
+<div>
+<p class="text-label-sm font-label-sm text-outline uppercase">วันหมดอายุ (EXP)</p>
+<p class="font-body-md text-body-md text-error font-semibold" id="detailExp">01/01/2025</p>
+</div>
+</div>
+</div>
+<div class="flex flex-col items-center justify-center p-lg bg-surface-container rounded-xl border border-outline-variant/50">
+<p class="text-label-sm font-label-sm text-on-surface-variant mb-md text-center">คิวอาร์โค้ดประจำสินค้า (Scan for Actions)</p>
+<div class="bg-white p-md rounded-lg shadow-sm border border-outline-variant mb-md">
+<span class="material-symbols-outlined text-[140px] text-on-surface">qr_code_2</span>
+</div>
+<p class="text-body-md font-bold text-primary tracking-widest uppercase" id="qrLabel">BX001-FLOW-77</p>
+<div class="mt-lg flex flex-col w-full gap-sm">
+<button class="w-full bg-primary text-on-primary py-sm rounded-lg font-title-md flex justify-center items-center gap-sm shadow-sm hover:brightness-110 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined">print</span> พิมพ์สติกเกอร์
+                            </button>
+<button class="w-full border border-primary text-primary py-sm rounded-lg font-title-md flex justify-center items-center gap-sm hover:bg-primary/5 active:scale-[0.98] transition-all">
+<span class="material-symbols-outlined">edit</span> แก้ไขข้อมูล
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-md pb-safe py-sm bg-surface shadow-lg border-t border-outline-variant">
+<button class="flex flex-col items-center justify-center text-primary-fixed-dim rounded-full px-md py-xs nav-item active" onclick="switchView('view-home')">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">shelves</span>
+<span class="font-label-sm text-label-sm">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-secondary-fixed-variant nav-item" onclick="switchView('view-list')">
+<span class="material-symbols-outlined">warehouse</span>
+<span class="font-label-sm text-label-sm">Inventory</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-secondary-fixed-variant nav-item">
+<span class="material-symbols-outlined">local_shipping</span>
+<span class="font-label-sm text-label-sm">Shipments</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-secondary-fixed-variant nav-item">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-sm text-label-sm">Settings</span>
+</button>
+</nav>
+<script>
+        const products = [
+            { id: "BX001", name: "Coca-Cola", category: "เครื่องดื่ม", qty: 120, unit: "กระป๋อง", status: "จัดเก็บแล้ว", location: "A01", mfg: "10/01/2024", exp: "10/01/2025", lot: "L7721" },
+            { id: "BX002", name: "Pepsi", category: "เครื่องดื่ม", qty: 85, unit: "กระป๋อง", status: "รอรับเข้า", location: "B02", mfg: "15/02/2024", exp: "15/02/2025", lot: "L8822" },
+            { id: "BX003", name: "Fanta Orange", category: "เครื่องดื่ม", qty: 50, unit: "ขวด", status: "พร้อมจัดส่ง", location: "C01", mfg: "05/01/2024", exp: "05/01/2025", lot: "L9911" },
+            { id: "BX004", name: "Sprite", category: "เครื่องดื่ม", qty: 24, unit: "ขวด", status: "ต้องตรวจสอบ", location: "D04", mfg: "01/12/2023", exp: "01/06/2024", lot: "L1101" },
+            { id: "BX005", name: "Drinking Water", category: "เครื่องดื่ม", qty: 200, unit: "ขวด", status: "จัดเก็บแล้ว", location: "A05", mfg: "20/03/2024", exp: "20/03/2026", lot: "L2202" },
+            { id: "BX006", name: "Mama Noodle", category: "อาหารแห้ง", qty: 30, unit: "กล่อง", status: "จัดเก็บแล้ว", location: "B05", mfg: "01/02/2024", exp: "01/02/2025", lot: "L3344" },
+            { id: "BX007", name: "Canned Fish", category: "อาหารแห้ง", qty: 45, unit: "กระป๋อง", status: "พร้อมจัดส่ง", location: "A03", mfg: "10/01/2024", exp: "10/01/2027", lot: "L4455" },
+            { id: "BX008", name: "Fresh Milk", category: "ผลิตภัณฑ์นม", qty: 40, unit: "กล่อง", status: "รอรับเข้า", location: "C04", mfg: "15/05/2024", exp: "22/05/2024", lot: "L5566" },
+            { id: "BX009", name: "Instant Coffee", category: "เครื่องดื่ม", qty: 10, unit: "โหล", status: "จัดเก็บแล้ว", location: "D01", mfg: "01/01/2024", exp: "01/01/2026", lot: "L6677" },
+            { id: "BX010", name: "Toilet Tissue", category: "ของใช้ส่วนตัว", qty: 100, unit: "แพ็ค", status: "จัดเก็บแล้ว", location: "E01", mfg: "20/12/2023", exp: "N/A", lot: "L7788" },
+            { id: "BX011", name: "Soap", category: "ของใช้ส่วนตัว", qty: 60, unit: "ก้อน", status: "จัดเก็บแล้ว", location: "E02", mfg: "01/03/2024", exp: "01/03/2027", lot: "L8899" },
+            { id: "BX012", name: "Shampoo", category: "ของใช้ส่วนตัว", qty: 25, unit: "ขวด", status: "พร้อมจัดส่ง", location: "E03", mfg: "10/02/2024", exp: "10/02/2027", lot: "L9900" },
+            { id: "BX013", name: "Detergent", category: "ของใช้ในบ้าน", qty: 15, unit: "แกลลอน", status: "จัดเก็บแล้ว", location: "F01", mfg: "05/01/2024", exp: "05/01/2026", lot: "L1212" },
+            { id: "BX014", name: "Rice 5kg", category: "อาหารหลัก", qty: 50, unit: "ถุง", status: "พร้อมจัดส่ง", location: "G01", mfg: "20/04/2024", exp: "20/04/2025", lot: "L2323" },
+            { id: "BX015", name: "Cooking Oil", category: "อาหารหลัก", qty: 36, unit: "ขวด", status: "จัดเก็บแล้ว", location: "G02", mfg: "15/03/2024", exp: "15/03/2025", lot: "L3434" },
+            { id: "BX016", name: "Sugar", category: "อาหารหลัก", qty: 20, unit: "ถุง", status: "จัดเก็บแล้ว", location: "G03", mfg: "10/02/2024", exp: "10/02/2026", lot: "L4545" },
+            { id: "BX017", name: "Salt", category: "อาหารหลัก", qty: 15, unit: "ถุง", status: "จัดเก็บแล้ว", location: "G04", mfg: "01/01/2024", exp: "01/01/2027", lot: "L5656" },
+            { id: "BX018", name: "Potato Chips", category: "ขนมขบเคี้ยว", qty: 80, unit: "ซอง", status: "รอรับเข้า", location: "H01", mfg: "01/05/2024", exp: "01/11/2024", lot: "L6767" },
+            { id: "BX019", name: "Green Tea", category: "เครื่องดื่ม", qty: 48, unit: "ขวด", status: "จัดเก็บแล้ว", location: "H02", mfg: "20/04/2024", exp: "20/04/2025", lot: "L7878" },
+            { id: "BX020", name: "Dishwashing Liquid", category: "ของใช้ในบ้าน", qty: 12, unit: "ขวด", status: "พร้อมจัดส่ง", location: "F02", mfg: "01/04/2024", exp: "01/04/2026", lot: "L8989" },
+        ];
+
+        let currentFilter = 'all';
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view-transition').forEach(view => {
+                view.classList.add('hidden-view');
+                view.classList.remove('active-view');
+            });
+            const active = document.getElementById(viewId);
+            active.classList.remove('hidden-view');
+            active.classList.add('active-view');
+            
+            // Sync bottom nav state
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('text-primary-fixed-dim');
+                item.classList.add('text-on-secondary-fixed-variant');
+                item.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 0";
+            });
+
+            if (viewId === 'view-home') {
+                 const item = document.querySelectorAll('.nav-item')[0];
+                 item.classList.add('text-primary-fixed-dim');
+                 item.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+            } else if (viewId === 'view-list') {
+                 const item = document.querySelectorAll('.nav-item')[1];
+                 item.classList.add('text-primary-fixed-dim');
+                 item.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
+            }
+        }
+
+        function getStatusColor(status) {
+            switch(status) {
+                case 'รอรับเข้า': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+                case 'จัดเก็บแล้ว': return 'bg-blue-100 text-blue-800 border-blue-200';
+                case 'พร้อมจัดส่ง': return 'bg-green-100 text-green-800 border-green-200';
+                case 'ต้องตรวจสอบ': return 'bg-red-100 text-red-800 border-red-200';
+                default: return 'bg-gray-100 text-gray-800 border-gray-200';
+            }
+        }
+
+        function renderProducts(data) {
+            const grid = document.getElementById('productGrid');
+            grid.innerHTML = '';
+            data.forEach((p, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white rounded-xl border border-outline-variant p-sm flex flex-col items-center text-center hover:shadow-lg hover:-translate-y-1 transition-all duration-300 opacity-0';
+                card.style.animation = `fadeIn 0.3s forwards ${index * 0.05}s`;
+                
+                card.innerHTML = `
+                    <div class="w-full h-32 bg-surface-container-low rounded-lg mb-sm flex items-center justify-center relative overflow-hidden group">
+                         <span class="material-symbols-outlined text-primary/30 text-[64px] group-hover:scale-110 transition-transform">inventory_2</span>
+                         <div class="absolute top-xs right-xs px-xs py-1 rounded bg-white/80 backdrop-blur-sm text-[10px] font-bold text-outline border border-outline-variant">${p.id}</div>
+                    </div>
+                    <h4 class="font-title-md text-title-md text-on-surface truncate w-full mb-xs">${p.name}</h4>
+                    <span class="px-md py-1 rounded-full text-[10px] font-bold uppercase mb-md border ${getStatusColor(p.status)}">${p.status}</span>
+                    <button onclick="showDetail('${p.id}')" class="mt-auto w-full py-xs bg-surface-container-high text-primary rounded-lg text-label-sm font-label-sm hover:bg-primary hover:text-on-primary transition-colors">Detail</button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function filterProducts() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = products.filter(p => 
+                (currentFilter === 'all' || p.status === currentFilter) &&
+                (p.name.toLowerCase().includes(query) || p.id.toLowerCase().includes(query))
+            );
+            renderProducts(filtered);
+        }
+
+        function filterByStatus(status) {
+            currentFilter = status;
+            document.querySelectorAll('.status-tab').forEach(tab => {
+                tab.classList.remove('bg-primary', 'text-on-primary');
+                tab.classList.add('bg-surface-container-high', 'text-on-surface-variant');
+            });
+            event.target.classList.add('bg-primary', 'text-on-primary');
+            event.target.classList.remove('bg-surface-container-high', 'text-on-surface-variant');
+            filterProducts();
+        }
+
+        function showDetail(id) {
+            const p = products.find(prod => prod.id === id);
+            if (!p) return;
+
+            document.getElementById('detailName').innerText = p.name;
+            document.getElementById('detailId').innerText = p.id;
+            document.getElementById('detailCategory').innerText = p.category;
+            document.getElementById('detailLocation').innerText = p.location;
+            document.getElementById('detailQty').innerText = p.qty;
+            document.getElementById('detailUnit').innerText = p.unit;
+            document.getElementById('detailMfg').innerText = p.mfg;
+            document.getElementById('detailExp').innerText = p.exp;
+            document.getElementById('qrLabel').innerText = `${p.id}-FLOW-${p.lot}`;
+            
+            const badge = document.getElementById('detailStatusBadge');
+            badge.innerText = p.status;
+            badge.className = `px-md py-xs rounded-full text-label-sm font-label-sm border ${getStatusColor(p.status)}`;
+
+            switchView('view-detail');
+        }
+
+        // Initial Load
+        window.onload = () => {
+            renderProducts(products);
+        };
+
+        // Custom animations for card loading
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        `;
+        document.head.append(style);
+
+    </script>
+</body></html>
