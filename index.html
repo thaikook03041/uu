@@ -544,62 +544,54 @@ let editingProductId = null;
 // เรียก Google Apps Script แบบ JSONP (ใช้ <script> tag แทน fetch)
 // เพื่อเลี่ยงปัญหา CORS ที่ Apps Script ไม่รองรับตอนเรียกข้าม origin
 let jsonpCounter = 0;
-function callSheetAPI(params, timeoutMs = 12000) {
-    return new Promise((resolve, reject) => {
-        const callbackName = 'sheetCallback_' + (jsonpCounter++) + '_' + Date.now();
-        const script = document.createElement('script');
-        let done = false;
+        
+async function callSheetAPI(params = {}, timeoutMs = 12000) {
 
-        const cleanup = () => {
-            done = true;
-            delete window[callbackName];
-            script.remove();
-            clearTimeout(timer);
-        };
+    const query = new URLSearchParams(params).toString();
 
-        window[callbackName] = (data) => {
-            if (done) return;
-            cleanup();
-            resolve(data);
-        };
+    const url = API_URL + (query ? '?' + query : '');
 
-        script.onerror = () => {
-            if (done) return;
-            cleanup();
-            reject(new Error('เชื่อมต่อ Google Sheets ไม่สำเร็จ (โหลดสคริปต์ล้มเหลว)'));
-        };
+    const controller = new AbortController();
 
-        const timer = setTimeout(() => {
-            if (done) return;
-            cleanup();
-            reject(new Error('เชื่อมต่อ Google Sheets หมดเวลา (timeout)'));
-        }, timeoutMs);
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, timeoutMs);
 
-        const query = new URLSearchParams({ ...params, callback: callbackName }).toString();
-        script.src = API_URL + '?' + query;
-        document.body.appendChild(script);
-    });
-}
-
-function normalizeProducts_(list) {
-    return (list || []).map(p => ({ ...p, qty: Number(p.qty) || 0 }));
-}
-
-async function loadProducts() {
     try {
-        const data = await callSheetAPI({ action: 'list' });
 
-        if (data.success) {
-            products = normalizeProducts_(data.products);
-        } else {
-            console.warn('โหลดจาก Sheet ไม่สำเร็จ:', data.error);
-            alert('ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้: ' + (data.error || ''));
+        const response = await fetch(url, {
+            method: 'GET',
+            cache: 'no-store',
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                'Google Sheets ตอบกลับ HTTP ' + response.status
+            );
         }
+
+        const data = await response.json();
+
+        return data;
+
     } catch (error) {
-        console.error(error);
-        alert('เชื่อมต่อ Google Sheets ไม่สำเร็จ: ' + error.message);
+
+        if (error.name === 'AbortError') {
+            throw new Error(
+                'เชื่อมต่อ Google Sheets หมดเวลา'
+            );
+        }
+
+        throw error;
+
+    } finally {
+
+        clearTimeout(timeout);
+
     }
 }
+
 
 
         function switchView(viewId) {
