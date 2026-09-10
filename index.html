@@ -1,1 +1,1424 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogisticsFlow - ระบบบันทึกและติดตามสถานะพัสดุ</title>
+    <!-- Google Fonts & Tailwind CSS -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- qrcode.js สำหรับสร้าง QR Code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- JsBarcode สำหรับสร้าง Barcode จากรหัสสินค้า (SKU) โดยไม่กระทบ QR Code เดิม -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.3/JsBarcode.all.min.js"></script>
+    <!-- Html5-Qrcode สำหรับสแกน Barcode ด้วยกล้อง (ขั้นตอนที่ 6) -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        
+        /* สไตล์สำหรับพิมพ์ A4 แบบหลายดวง / เดี่ยว */
+        @media print {
+            body * { visibility: hidden !important; }
+            #multiPrintContainer, #multiPrintContainer *,
+            #printStickerModal, #printStickerModal * { visibility: visible !important; }
+            body > *:not(#multiPrintContainer):not(#printStickerModal) { display: none !important; }
+            #multiPrintContainer {
+                position: absolute; left: 0; top: 0; width: 100%;
+                background: white; display: grid !important; 
+                grid-template-columns: repeat(2, 1fr); gap: 15px; padding: 10px;
+            }
+            #printStickerModal {
+                position: absolute !important;
+                left: 0; top: 0;
+                width: 100% !important;
+                background: white !important;
+                padding: 20px !important;
+                align-items: flex-start !important;
+                justify-content: center !important;
+            }
+            /* ขยายป้ายให้ใหญ่ขึ้นตอนพิมพ์ เพื่อให้ติดกล่องขนาดใหญ่ได้ชัดเจน */
+            #printStickerModal > div.bg-white {
+                max-width: 100% !important;
+                width: 500px !important;
+                padding: 40px !important;
+                border-width: 3px !important;
+            }
+            #printStickerModal h4 {
+                font-size: 16px !important;
+                letter-spacing: 0.1em !important;
+            }
+            #printStickerModal #stickerTrackingNo {
+                font-size: 64px !important;
+            }
+            #printStickerModal #stickerTrackingNoB {
+                font-size: 40px !important;
+            }
+            #printStickerModal #stickerProductDetails {
+                padding: 16px !important;
+            }
+            #printStickerModal #stkProductName {
+                font-size: 22px !important;
+            }
+            #printStickerModal #stkProductCode,
+            #printStickerModal #stkProductLoc {
+                font-size: 16px !important;
+            }
+            #printStickerModal #stickerQrcode img,
+            #printStickerModal #stickerQrcode canvas {
+                width: 220px !important;
+                height: 220px !important;
+            }
+            #printStickerModal #stickerQrcodeB img,
+            #printStickerModal #stickerQrcodeB canvas {
+                width: 160px !important;
+                height: 160px !important;
+            }
+            #printStickerModal table td {
+                font-size: 18px !important;
+                padding: 10px 14px !important;
+            }
+            #printStickerModal p {
+                font-size: 14px !important;
+            }
+            .sticker-item {
+                break-inside: avoid;
+                border: 2px dashed #333 !important;
+                padding: 10px;
+                border-radius: 10px;
+                text-align: center;
+                background: #fff;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col justify-between">
 
+    <!-- Navbar -->
+    <nav class="bg-indigo-600 text-white shadow-md no-print" id="mainNavbar">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <!-- โลโก้ใหม่ทรงกลม -->
+            <div class="flex items-center gap-2.5 cursor-pointer" onclick="switchTab('client')">
+                <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center p-1 shadow-inner overflow-hidden">
+                    <svg viewBox="0 0 100 100" class="w-full h-full">
+                        <circle cx="50" cy="50" r="50" fill="#ffffff"/>
+                        <path d="M42 12 C68 12, 85 30, 78 52 C72 34, 58 20, 42 12 Z" fill="#F59E0B"/>
+                        <path d="M45 15 C65 15, 80 32, 74 50 C60 35, 48 22, 45 15 Z" fill="#FBBF24"/>
+                        <path d="M44 18 C30 25, 20 42, 25 62 C30 80, 50 85, 65 72 C55 80, 35 75, 28 58 C22 40, 32 24, 44 18 Z" fill="#1E40AF"/>
+                        <path d="M47 22 C35 28, 26 44, 30 60 C35 75, 52 80, 62 68 C50 75, 38 70, 32 55 C27 40, 36 28, 47 22 Z" fill="#2563EB"/>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-bold tracking-wide">LogisticsFlow</h1>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="switchTab('client')" id="btnTabClient" class="text-sm px-3 py-1.5 rounded-lg bg-indigo-700 font-medium transition">🔍 ค้นหาพัสดุ</button>
+                <button onclick="switchTab('admin')" id="btnTabAdmin" class="text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-medium transition">📋 จัดการสินค้า (Admin)</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="max-w-5xl w-full mx-auto px-4 py-8 flex-grow">
+
+        <!-- ================= TAB 1: หน้าค้นหา / หน้าจอรายละเอียดพัสดุ ================= -->
+        <div id="tabClient" class="tab-content">
+            <div id="backToAdminContainer" class="mb-4 max-w-2xl mx-auto hidden">
+                <button onclick="goBackToAdmin()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-4 py-2 rounded-xl font-medium transition flex items-center gap-1.5 shadow-sm">
+                    ⬅️ กลับไปหน้าจัดการสินค้า (Admin)
+                </button>
+            </div>
+
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">ตรวจสอบสถานะพัสดุ</h2>
+                <p class="text-slate-500">ระบบติดตามสถานะสินค้าแบบเรียลไทม์</p>
+            </div>
+
+            <!-- Search Box -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex gap-3 max-w-2xl mx-auto">
+                <input type="text" id="trackingInput" placeholder="กรอกหมายเลขพัสดุ เช่น LF1001" 
+                    class="flex-grow px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-700 uppercase">
+                <button onclick="searchTracking()" 
+                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-medium transition duration-200">
+                    ตรวจสอบ
+                </button>
+            </div>
+
+            <!-- Result Section -->
+            <div id="resultSection" class="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 max-w-2xl mx-auto hidden">
+                <div class="border-b border-slate-100 pb-4 mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <p class="text-xs text-slate-400">หมายเลขระบบ / Tracking</p>
+                        <h3 id="resTrackingNo" class="text-xl font-bold text-indigo-600">-</h3>
+                    </div>
+                </div>
+
+                <!-- Product Information Card -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 mb-6 space-y-4">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Product Information</p>
+                        <h3 class="text-xl font-bold text-slate-800 mt-0.5" id="resProductName">-</h3>
+                        <p class="text-sm font-semibold text-slate-500" id="resProductCode">-</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200 text-sm">
+                        <div>
+                            <span class="text-xs text-slate-400 block">หมวดหมู่</span>
+                            <span class="font-medium text-slate-700" id="resProductCategory">-</span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-slate-400 block">ตำแหน่งจัดเก็บ</span>
+                            <span class="font-medium text-slate-700" id="resProductLocation">-</span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-slate-400 block">จำนวน</span>
+                            <span class="font-medium text-slate-700" id="resProductQty">-</span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-slate-400 block">หน่วย</span>
+                            <span class="font-medium text-slate-700" id="resProductUnit">-</span>
+                        </div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between text-xs text-slate-400 gap-1">
+                        <div>วันที่ลงทะเบียน: <span id="resProductCreated" class="font-medium text-slate-600">-</span></div>
+                        <div>แก้ไขล่าสุด: <span id="resProductUpdated" class="font-medium text-indigo-600">-</span></div>
+                    </div>
+                </div>
+
+                <!-- Timeline Status (4 ขั้นตอน) -->
+                <div class="space-y-6 relative before:absolute before:inset-0 before:left-3 before:w-0.5 before:bg-slate-200 mb-6">
+                    <div class="flex items-start gap-4 relative" id="step1">
+                        <div class="w-6 h-6 rounded-full bg-slate-200 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white">1</div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800 text-sm">รอรับเข้า</h4>
+                            <p class="text-xs text-slate-400">ระบบได้รับข้อมูลสินค้าและรอนำส่งเข้าระบบ</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 relative" id="step2">
+                        <div class="w-6 h-6 rounded-full bg-slate-200 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white">2</div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800 text-sm">จัดเก็บแล้ว</h4>
+                            <p class="text-xs text-slate-400">สินค้าเดินทางมาถึงคลังและจัดเก็บเข้าเรียบร้อย</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 relative" id="step3">
+                        <div class="w-6 h-6 rounded-full bg-slate-200 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white">3</div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800 text-sm">พร้อมจัดส่ง</h4>
+                            <p class="text-xs text-slate-400">พัสดุกำลังถูกนำจ่ายไปยังปลายทาง</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-4 relative" id="step4">
+                        <div class="w-6 h-6 rounded-full bg-slate-200 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white">4</div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800 text-sm">ต้องตรวจสอบ</h4>
+                            <p class="text-xs text-slate-400">พัสดุมีปัญหาหรือต้องการการตรวจสอบเพิ่มเติม</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error -->
+            <div id="errorSection" class="mt-8 bg-red-50 border border-red-100 p-4 rounded-xl text-center text-red-600 hidden text-sm max-w-2xl mx-auto">
+                ไม่พบข้อมูลพัสดุนี้ในระบบ กรุณาตรวจสอบหมายเลขใหม่อีกครั้ง
+            </div>
+        </div>
+
+        <!-- ================= TAB 2: ระบบจัดการและบันทึกสินค้า (Admin Dashboard) ================= -->
+        <div id="tabAdmin" class="tab-content hidden">
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-1">📋 ระบบบันทึกและรวบรวมสินค้า (Admin)</h2>
+                    <p class="text-slate-500 text-sm">แดชบอร์ดสรุปสถิติตัวเลข และจัดการพัสดุทั้งหมดในระบบ</p>
+                </div>
+                <button onclick="openBarcodeScanner()" class="bg-slate-800 hover:bg-slate-900 text-white text-sm px-4 py-2.5 rounded-xl font-medium transition shadow-sm flex items-center gap-2 whitespace-nowrap">
+                    📷 สแกนบาร์โค้ด
+                </button>
+            </div>
+
+            <!-- 📊 Dashboard Cards สรุปตัวเลขสถิติ -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 text-center">
+                    <p class="text-xs text-slate-400 mb-1 font-medium">สินค้าทั้งหมด</p>
+                    <h3 id="statTotal" class="text-2xl font-bold text-slate-800">0</h3>
+                    <p class="text-[10px] text-slate-400 mt-1">ชิ้น</p>
+                </div>
+                <div class="bg-amber-50 p-4 rounded-2xl shadow-sm border border-amber-100 text-center">
+                    <p class="text-xs text-amber-600 mb-1 font-medium">รอรับเข้า</p>
+                    <h3 id="statWaiting" class="text-2xl font-bold text-amber-700">0</h3>
+                    <p class="text-[10px] text-amber-500 mt-1">ชิ้น</p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-2xl shadow-sm border border-blue-100 text-center">
+                    <p class="text-xs text-blue-600 mb-1 font-medium">จัดเก็บแล้ว</p>
+                    <h3 id="statStored" class="text-2xl font-bold text-blue-700">0</h3>
+                    <p class="text-[10px] text-blue-500 mt-1">ชิ้น</p>
+                </div>
+                <div class="bg-green-50 p-4 rounded-2xl shadow-sm border border-green-100 text-center">
+                    <p class="text-xs text-green-600 mb-1 font-medium">พร้อมจัดส่ง</p>
+                    <h3 id="statShipping" class="text-2xl font-bold text-green-700">0</h3>
+                    <p class="text-[10px] text-green-500 mt-1">ชิ้น</p>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-2xl shadow-sm border border-purple-100 text-center col-span-2 md:col-span-1">
+                    <p class="text-xs text-purple-600 mb-1 font-medium">ต้องตรวจสอบ</p>
+                    <h3 id="statCheck" class="text-2xl font-bold text-purple-700">0</h3>
+                    <p class="text-[10px] text-purple-500 mt-1">ชิ้น</p>
+                </div>
+            </div>
+
+            <!-- Form บันทึกสินค้าใหม่ -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
+                <h3 class="font-bold text-slate-700 text-base mb-1">บันทึกสินค้าเข้าใหม่</h3>
+                <p class="text-xs text-slate-400 mb-4">ระบบจะสุ่มหมายเลขพัสดุให้อัตโนมัติทันที</p>
+                
+                <div class="mb-4 flex items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input type="checkbox" id="toggleDetailCheckbox" onclick="toggleDetailForm()" class="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer">
+                    <label for="toggleDetailCheckbox" class="text-sm font-medium text-slate-700 cursor-pointer">ต้องการระบุรายละเอียดสินค้าแบบละเอียด</label>
+                </div>
+
+                <div id="productDetailSection" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อสินค้า</label>
+                        <input type="text" id="inputProductName" placeholder="เช่น เสื้อยืด Oversize" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">รหัสสินค้า (SKU / Code) — ระบบสร้างให้อัตโนมัติ</label>
+                        <input type="text" id="inputProductCode" readonly class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-100 text-slate-700 font-mono font-semibold cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">หมวดหมู่</label>
+                        <select id="inputProductCategory" onchange="toggleCategoryOther()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="เครื่องเขียน">เครื่องเขียน</option>
+                            <option value="ของใช้">ของใช้</option>
+                            <option value="ของใช้ในครัว">ของใช้ในครัว</option>
+                            <option value="อื่นๆ">อื่น ๆ (ระบุเอง)</option>
+                        </select>
+                        <input type="text" id="inputProductCategoryOther" placeholder="ระบุชื่อหมวดหมู่" class="hidden mt-2 w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">สถานะสินค้า</label>
+                        <select id="inputProductStatus" onchange="toggleLocationField()" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="1">รอรับเข้า</option>
+                            <option value="2">จัดเก็บแล้ว</option>
+                            <option value="3">พร้อมจัดส่ง</option>
+                            <option value="4">ต้องตรวจสอบ</option>
+                        </select>
+                    </div>
+                    <div id="inputProductLocationWrapper">
+                        <label class="block text-xs font-medium text-slate-600 mb-1" id="inputProductLocationLabel">ตำแหน่งเก็บ</label>
+                        <select id="inputProductLocation" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">จำนวน</label>
+                        <input type="number" id="inputProductQty" placeholder="เช่น 5" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">หน่วย</label>
+                        <input type="text" id="inputProductUnit" placeholder="เช่น ชิ้น" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="sm:col-span-3">
+                        <label class="block text-xs font-medium text-slate-600 mb-1">วันที่ลงทะเบียนสินค้า</label>
+                        <input type="text" id="inputProductCreated" placeholder="เช่น 26/08/2026 08:20" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <button onclick="addNewRandomParcel()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-6 py-3 rounded-xl font-medium transition shadow-sm w-full sm:w-auto">
+                    🎲 สุ่มเลขพัสดุและบันทึกเข้าคลัง
+                </button>
+            </div>
+
+            <!-- ตารางรวบรวมสินค้าทั้งหมดในระบบ -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+                    <h3 class="font-bold text-slate-700 text-base">📦 รายการสินค้าทั้งหมดในคลัง</h3>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                            <button type="button" onclick="setStickerLayoutMode('qr-only')" id="layoutBtnQrOnlyBulk" class="text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition">QR อย่างเดียว</button>
+                            <button type="button" onclick="setStickerLayoutMode('qr-table')" id="layoutBtnQrTableBulk" class="text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition">QR + ข้อมูล</button>
+                        </div>
+                        <button id="btnBulkDelete" onclick="deleteSelectedParcels()" class="hidden bg-red-600 hover:bg-red-700 text-white text-xs px-4 py-2 rounded-xl font-medium transition shadow-sm">
+                            🗑️ ลบรายการที่เลือก
+                        </button>
+                        <button id="btnBulkPrint" onclick="openBulkPrintModal()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-4 py-2 rounded-xl font-medium transition shadow-sm">
+                            🖨️ พิมพ์สติกเกอร์ (A4)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- แถบค้นหา และ ตัวกรองสถานะ -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 text-xs">🔍</span>
+                        <input type="text" id="adminSearchBox" oninput="loadAdminData()" placeholder="ค้นหาเลขพัสดุ, ชื่อสินค้า หรือรหัสสินค้า..." class="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <select id="adminFilterStatus" onchange="loadAdminData()" class="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="">📌 สถานะทั้งหมด</option>
+                            <option value="1">รอรับเข้า</option>
+                            <option value="2">จัดเก็บแล้ว</option>
+                            <option value="3">พร้อมจัดส่ง</option>
+                            <option value="4">ต้องตรวจสอบ</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-xs text-slate-400">
+                                <th class="pb-3 w-10 text-center"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)" class="rounded border-slate-300"></th>
+                                <th class="pb-3 font-semibold">หมายเลขพัสดุ / รายละเอียด</th>
+                                <th class="pb-3 font-semibold">สถานะปัจจุบัน</th>
+                                <th class="pb-3 font-semibold text-center">ดูข้อมูล / QR / ลบ</th>
+                                <th class="pb-3 font-semibold text-right">เปลี่ยนสถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminParcelTable" class="text-sm text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Container สำหรับพิมพ์หลายใบลง A4 -->
+    <div id="multiPrintContainer" class="hidden"></div>
+
+    <!-- Modal สำหรับปริ้นท์สติกเกอร์ QR Code เดี่ยว -->
+    <div id="printStickerModal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center z-50 p-4">
+        <div class="bg-white p-6 rounded-2xl shadow-xl max-w-xs w-full text-center border-2 border-slate-800 relative">
+            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl mb-3 no-print">
+                <button type="button" onclick="setStickerLayoutMode('qr-only')" id="layoutBtnQrOnlyModal" class="flex-1 text-[11px] py-1.5 rounded-lg font-medium transition">QR อย่างเดียว</button>
+                <button type="button" onclick="setStickerLayoutMode('qr-table')" id="layoutBtnQrTableModal" class="flex-1 text-[11px] py-1.5 rounded-lg font-medium transition">QR + ข้อมูล (ตาราง)</button>
+            </div>
+
+            <!-- แบบที่ 1: QR อย่างเดียว (แบบเดิม) -->
+            <div id="stickerLayoutA">
+                <div class="border-b-2 border-dashed border-slate-300 pb-2 mb-2">
+                    <h4 class="text-[10px] font-bold tracking-widest text-slate-400 uppercase">LogisticsFlow Express</h4>
+                    <h3 id="stickerTrackingNo" class="text-2xl font-black text-slate-900 mt-1">-</h3>
+                </div>
+                <div id="stickerProductDetails" class="hidden text-xs bg-slate-50 p-2 rounded-lg border border-slate-200 mb-2 text-left space-y-0.5">
+                    <p class="font-bold text-slate-800" id="stkProductName">-</p>
+                    <div class="flex justify-between text-[11px] text-slate-500">
+                        <span id="stkProductCode">รหัส: -</span>
+                        <span id="stkProductLoc">ตำแหน่ง: -</span>
+                    </div>
+                </div>
+                <div class="my-2 flex flex-col items-center">
+                    <div id="stickerQrcode" class="bg-white p-2 border border-slate-200 rounded-lg inline-block"></div>
+                </div>
+                <div id="stickerBarcodeWrapper" class="hidden flex flex-col items-center mb-2">
+                    <svg id="stickerBarcode"></svg>
+                </div>
+                <div class="border-t-2 border-dashed border-slate-300 pt-2 mt-2 text-center">
+                    <p class="text-[10px] text-slate-400">สแกนเพื่อตรวจสอบสถานะพัสดุ</p>
+                </div>
+            </div>
+
+            <!-- แบบที่ 2: QR ซ้าย + ข้อมูลตารางขวา (เพิ่มใหม่) -->
+            <div id="stickerLayoutB" class="hidden">
+                <div class="border-b-2 border-dashed border-slate-300 pb-1.5 mb-2 flex items-center justify-between">
+                    <h4 class="text-[9px] font-bold tracking-widest text-slate-400 uppercase">LogisticsFlow</h4>
+                    <h3 id="stickerTrackingNoB" class="text-lg font-black text-slate-900">-</h3>
+                </div>
+                <div class="flex gap-2 items-stretch text-left">
+                    <div id="stickerQrcodeB" class="bg-white p-1 border border-slate-300 rounded shrink-0 flex items-center justify-center"></div>
+                    <table class="text-[10px] border-collapse border border-slate-300 flex-grow">
+                        <tbody>
+                            <tr>
+                                <td class="border border-slate-300 px-1.5 py-1 bg-slate-50 text-slate-500 font-medium whitespace-nowrap">ชื่อสินค้า</td>
+                                <td class="border border-slate-300 px-1.5 py-1 font-semibold text-slate-800" id="stkTblName">-</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-slate-300 px-1.5 py-1 bg-slate-50 text-slate-500 font-medium whitespace-nowrap">รหัส SKU</td>
+                                <td class="border border-slate-300 px-1.5 py-1 font-semibold text-slate-800" id="stkTblCode">-</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-slate-300 px-1.5 py-1 bg-slate-50 text-slate-500 font-medium whitespace-nowrap">โซนเก็บ</td>
+                                <td class="border border-slate-300 px-1.5 py-1 font-semibold text-slate-800" id="stkTblLoc">-</td>
+                            </tr>
+                            <tr>
+                                <td class="border border-slate-300 px-1.5 py-1 bg-slate-50 text-slate-500 font-medium whitespace-nowrap">จำนวน</td>
+                                <td class="border border-slate-300 px-1.5 py-1 font-semibold text-slate-800" id="stkTblQty">-</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="stickerBarcodeWrapperB" class="hidden flex flex-col items-center mt-2 mb-1">
+                    <svg id="stickerBarcodeB"></svg>
+                </div>
+                <div class="border-t-2 border-dashed border-slate-300 pt-1.5 mt-2 text-center">
+                    <p class="text-[9px] text-slate-400">สแกนเพื่อตรวจสอบสถานะพัสดุ</p>
+                </div>
+            </div>
+
+            <div class="mt-4 flex gap-2 no-print">
+                <button onclick="window.print()" class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2.5 rounded-xl font-medium">พิมพ์ป้ายสติกเกอร์</button>
+                <button onclick="closeStickerModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-4 py-2.5 rounded-xl font-medium">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแก้ไขข้อมูลสินค้า (เพิ่มใหม่) -->
+    <div id="editParcelModal" class="fixed inset-0 bg-black/50 hidden justify-center items-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base">✏️ แก้ไขข้อมูลสินค้า</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">หมายเลขพัสดุ: <span id="editParcelTrackingNo" class="font-semibold text-indigo-600">-</span></p>
+                </div>
+                <button onclick="closeEditParcelModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            <form onsubmit="saveEditedParcel(event)" class="p-5 space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อสินค้า</label>
+                    <input type="text" id="editInputName" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">รหัสสินค้า (SKU / Code)</label>
+                    <input type="text" id="editInputCode" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">หมวดหมู่</label>
+                    <input type="text" id="editInputCategory" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">ตำแหน่งเก็บ</label>
+                        <input type="text" id="editInputLocation" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">จำนวน</label>
+                        <input type="number" id="editInputQty" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">หน่วย</label>
+                    <input type="text" id="editInputUnit" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-grow bg-indigo-600 hover:bg-indigo-700 text-white text-sm py-2.5 rounded-xl font-medium transition">บันทึกการแก้ไข</button>
+                    <button type="button" onclick="closeEditParcelModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm px-4 py-2.5 rounded-xl font-medium transition">ยกเลิก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal สแกนบาร์โค้ดด้วยกล้อง (เพิ่มใหม่ - ขั้นตอนที่ 6) -->
+    <div id="barcodeScannerModal" class="fixed inset-0 bg-black/60 hidden justify-center items-center z-[100] p-4 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full">
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-base">📷 สแกนบาร์โค้ด</h3>
+                <button onclick="closeBarcodeScanner()" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+            </div>
+            <div class="p-4">
+                <div id="barcodeScannerRegion" class="w-full rounded-xl overflow-hidden bg-slate-900"></div>
+                <p id="barcodeScannerStatus" class="text-xs text-slate-500 text-center mt-3">กำลังขอสิทธิ์ใช้งานกล้อง...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-xs text-slate-400 no-print">
+        &copy; 2026 LogisticsFlow. All rights reserved.
+    </footer>
+
+    <!-- JavaScript ระบบการทำงาน -->
+    <script>
+        const defaultDatabase = {
+            "LF1001": { 
+                status: 1, 
+                name: "เสื้อยืดคอกลม", 
+                code: "TEST001", 
+                category: "เสื้อผ้า", 
+                location: "A1", 
+                qty: "10", 
+                unit: "ตัว", 
+                timestamp: 1748740000000,
+                created: "01/06/2026 10:00", 
+                updated: "01/06/2026 10:00" 
+            },
+            "LF1002": { 
+                status: 2, 
+                name: "กางเกงยีนส์ขาสั้น", 
+                code: "TEST002", 
+                category: "กางเกง", 
+                location: "A2", 
+                qty: "5", 
+                unit: "ชิ้น", 
+                timestamp: 1748743600000,
+                created: "02/06/2026 11:30", 
+                updated: "02/06/2026 12:15" 
+            }
+        };
+
+        // ===================================================================
+        // การเชื่อมต่อ Google Sheets (เพิ่มใหม่)
+        // -------------------------------------------------------------------
+        // แก้เฉพาะ getDatabase()/saveDatabase() เท่านั้น ฟังก์ชันอื่นทั้งหมด
+        // ในไฟล์นี้ไม่ถูกแตะต้อง เพราะทุกที่เรียกผ่าน 2 ฟังก์ชันนี้อยู่แล้ว
+        // ===================================================================
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyAjeBWKnA3hBO4GXb_Kt4erdVoQwkW5EneeBWkdzFZSibhLLF806qIlDotYaTLWuh9/exec';
+        let cachedDB = null; // ข้อมูลล่าสุดที่โหลดมาจาก Google Sheets (เก็บไว้ในหน่วยความจำ)
+        let lastSyncedSnapshot = {}; // สำเนาข้อมูล ณ ครั้งล่าสุดที่ซิงก์กับ Sheets สำเร็จ ใช้เทียบหาว่าอะไรเปลี่ยนไปบ้าง
+
+        // เรียก Google Apps Script แบบ JSONP (ใช้ <script> tag แทน fetch)
+        // เพื่อเลี่ยงปัญหา CORS ที่ Apps Script ไม่รองรับตอนเรียกข้าม origin
+        let jsonpCounter = 0;
+        function callSheetAPI(params, timeoutMs = 15000) {
+            return new Promise((resolve, reject) => {
+                const callbackName = 'sheetCb_' + (jsonpCounter++) + '_' + Date.now();
+                const script = document.createElement('script');
+                let done = false;
+
+                const cleanup = () => {
+                    done = true;
+                    delete window[callbackName];
+                    script.remove();
+                    clearTimeout(timer);
+                };
+
+                window[callbackName] = (data) => {
+                    if (done) return;
+                    cleanup();
+                    resolve(data);
+                };
+
+                script.onerror = () => {
+                    if (done) return;
+                    cleanup();
+                    reject(new Error('เชื่อมต่อ Google Sheets ไม่สำเร็จ (โหลดสคริปต์ล้มเหลว)'));
+                };
+
+                const timer = setTimeout(() => {
+                    if (done) return;
+                    cleanup();
+                    reject(new Error('เชื่อมต่อ Google Sheets หมดเวลา (timeout)'));
+                }, timeoutMs);
+
+                const query = new URLSearchParams({ ...params, callback: callbackName }).toString();
+                script.src = API_URL + '?' + query;
+                document.body.appendChild(script);
+            });
+        }
+
+        // โหลดข้อมูลทั้งหมดจาก Google Sheets มาเก็บไว้ใน cachedDB
+        // (ทำงานตอนเปิดหน้าเว็บครั้งแรก)
+        async function initFromSheet() {
+            try {
+                const result = await callSheetAPI({ action: 'load' });
+                if (result.success) {
+                    cachedDB = result.data || {};
+                    // เก็บสำเนาไว้เทียบ diff ครั้งถัดไป (ต้อง deep copy ไม่ใช่ reference เดียวกับ cachedDB)
+                    lastSyncedSnapshot = JSON.parse(JSON.stringify(cachedDB));
+                    localStorage.setItem('logistics_db', JSON.stringify(cachedDB));
+
+                    // ถ้าตอนนี้อยู่หน้า Admin อยู่แล้ว ให้รีเฟรชตารางด้วยข้อมูลจริง
+                    if (!document.getElementById('tabAdmin').classList.contains('hidden')) {
+                        loadAdminData();
+                    }
+                    // ถ้ามาจากลิงก์ QR (?track=...) ให้ค้นหาใหม่ด้วยข้อมูลจริง
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.get('track')) {
+                        searchTracking();
+                    }
+                } else {
+                    console.warn('โหลดจาก Google Sheets ไม่สำเร็จ:', result.error);
+                }
+            } catch (err) {
+                console.error('เชื่อมต่อ Google Sheets ไม่สำเร็จ ใช้ข้อมูลในเครื่อง/ตัวอย่างแทนชั่วคราว:', err);
+            }
+        }
+        window.addEventListener('DOMContentLoaded', initFromSheet);
+        window.addEventListener('DOMContentLoaded', () => setStickerLayoutMode('qr-only'));
+
+        function getDatabase() {
+            // ถ้าโหลดจาก Google Sheets มาแล้ว ใช้ข้อมูลชุดนั้นเป็นหลัก
+            if (cachedDB) return cachedDB;
+            // ระหว่างที่ยังโหลดจาก Sheets ไม่เสร็จ ใช้ข้อมูลสำรองในเครื่องไปพลางก่อน
+            const data = localStorage.getItem('logistics_db');
+            return data ? JSON.parse(data) : defaultDatabase;
+        }
+
+        function saveDatabase(db) {
+            cachedDB = db;
+            localStorage.setItem('logistics_db', JSON.stringify(db));
+
+            // หาว่ารายการไหน "เพิ่มใหม่ / แก้ไข" และรายการไหน "ถูกลบ" ไปบ้าง
+            // เทียบกับสำเนาล่าสุดที่ซิงก์สำเร็จ (ไม่ใช่ cachedDB เพราะถูก mutate ไปแล้ว)
+            const oldKeys = Object.keys(lastSyncedSnapshot);
+            const newKeys = Object.keys(db);
+
+            const changedKeys = newKeys.filter(
+                k => JSON.stringify(lastSyncedSnapshot[k]) !== JSON.stringify(db[k])
+            );
+            const removedKeys = oldKeys.filter(k => !(k in db));
+
+            // ส่งเฉพาะรายการที่เปลี่ยน/เพิ่มใหม่ (ทีละรายการ ไม่ส่งทั้งฐานข้อมูล กัน URL ยาวเกินไป)
+            changedKeys.forEach(trackingNo => {
+                const item = db[trackingNo] || {};
+                callSheetAPI({
+                    action: 'upsert',
+                    trackingNo: trackingNo,
+                    status: item.status != null ? item.status : 1,
+                    name: item.name || '',
+                    code: item.code || '',
+                    category: item.category || '',
+                    location: item.location || '',
+                    qty: item.qty || '',
+                    unit: item.unit || '',
+                    timestamp: item.timestamp || Date.now(),
+                    created: item.created || '',
+                    updated: item.updated || ''
+                }).catch(err => {
+                    console.error('บันทึกไป Google Sheets ไม่สำเร็จ (' + trackingNo + '):', err);
+                    alert('บันทึกรายการ ' + trackingNo + ' ไป Google Sheets ไม่สำเร็จ: ' + err.message + '\n\n(ข้อมูลยังถูกบันทึกในเครื่องนี้ไว้ก่อน)');
+                });
+            });
+
+            // ส่งลบรายการที่หายไปจากฐานข้อมูล
+            removedKeys.forEach(trackingNo => {
+                callSheetAPI({ action: 'delete', trackingNo: trackingNo }).catch(err => {
+                    console.error('ลบใน Google Sheets ไม่สำเร็จ (' + trackingNo + '):', err);
+                    alert('ลบรายการ ' + trackingNo + ' ใน Google Sheets ไม่สำเร็จ: ' + err.message);
+                });
+            });
+
+            // อัปเดตสำเนาให้ตรงกับสถานะล่าสุด (ใช้เทียบ diff ครั้งถัดไป)
+            lastSyncedSnapshot = JSON.parse(JSON.stringify(db));
+        }
+
+        function getCurrentDateTime() {
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const year = now.getFullYear();
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            return `${day}/${month}/${year} ${hours}:${minutes}`;
+        }
+
+        function switchTab(tab) {
+            document.getElementById('tabClient').classList.add('hidden');
+            document.getElementById('tabAdmin').classList.add('hidden');
+            document.getElementById('btnTabClient').className = "text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-medium transition";
+            document.getElementById('btnTabAdmin').className = "text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-medium transition";
+
+            if (tab === 'client') {
+                document.getElementById('tabClient').classList.remove('hidden');
+                document.getElementById('btnTabClient').className = "text-sm px-3 py-1.5 rounded-lg bg-indigo-700 font-medium transition";
+            } else if (tab === 'admin') {
+                document.getElementById('tabAdmin').classList.remove('hidden');
+                document.getElementById('btnTabAdmin').className = "text-sm px-3 py-1.5 rounded-lg bg-indigo-700 font-medium transition";
+                document.getElementById('backToAdminContainer').classList.add('hidden');
+                loadAdminData();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const trackingParam = urlParams.get('track');
+
+            if (trackingParam) {
+                switchTab('client');
+                document.getElementById('trackingInput').value = trackingParam.toUpperCase();
+                searchTracking();
+            }
+        });
+
+        // แสดง/ซ่อนช่องกรอกหมวดหมู่เอง เมื่อเลือก "อื่น ๆ" ในฟอร์มเพิ่มสินค้า
+        function toggleCategoryOther() {
+            const select = document.getElementById('inputProductCategory');
+            const otherInput = document.getElementById('inputProductCategoryOther');
+            if (select.value === 'อื่นๆ') {
+                otherInput.classList.remove('hidden');
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.value = '';
+            }
+        }
+
+        // แสดงช่อง "ตำแหน่งจัดเก็บ" เฉพาะตอนเลือกสถานะ "จัดเก็บแล้ว" (value = 2) เท่านั้น
+        // ตำแหน่งจัดเก็บแสดงเสมอ แต่ตัวเลือกเปลี่ยนไปตามสถานะที่เลือก:
+        // สถานะ "จัดเก็บแล้ว" -> B01/B02/B03, สถานะอื่นๆ -> A/B/C/D (แบบเดิม)
+        function toggleLocationField() {
+            const status = document.getElementById('inputProductStatus').value;
+            const label = document.getElementById('inputProductLocationLabel');
+            const locationSelect = document.getElementById('inputProductLocation');
+
+            if (status === '2') {
+                label.innerText = 'ตำแหน่งจัดเก็บ';
+                locationSelect.innerHTML = `
+                    <option value="B01">B01</option>
+                    <option value="B02">B02</option>
+                    <option value="B03">B03</option>
+                `;
+            } else {
+                label.innerText = 'ตำแหน่งเก็บ';
+                locationSelect.innerHTML = `
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                    <option value="D">D</option>
+                `;
+            }
+        }
+
+        function toggleDetailForm() {
+            const isChecked = document.getElementById('toggleDetailCheckbox').checked;
+            const detailSection = document.getElementById('productDetailSection');
+            if (isChecked) {
+                detailSection.classList.remove('hidden');
+                document.getElementById('inputProductCreated').value = getCurrentDateTime();
+                document.getElementById('inputProductCode').value = generateUniqueSKU();
+            } else {
+                detailSection.classList.add('hidden');
+                document.getElementById('inputProductName').value = '';
+                document.getElementById('inputProductCode').value = '';
+                document.getElementById('inputProductCategory').value = 'เครื่องเขียน';
+                document.getElementById('inputProductCategoryOther').value = '';
+                document.getElementById('inputProductCategoryOther').classList.add('hidden');
+                document.getElementById('inputProductStatus').value = '1';
+                toggleLocationField();
+                document.getElementById('inputProductQty').value = '';
+                document.getElementById('inputProductUnit').value = '';
+                document.getElementById('inputProductCreated').value = '';
+            }
+        }
+
+        // สร้างรหัสสินค้า (SKU) อัตโนมัติ: ตัวอักษร A-Z 3 ตัว + เลข 3 หลัก เช่น ABC001
+        // สุ่มใหม่จนกว่าจะได้รหัสที่ไม่ซ้ำกับ "รหัสสินค้า (code)" ที่มีอยู่แล้วในระบบ
+        function generateUniqueSKU() {
+            const db = getDatabase();
+            const existingCodes = Object.values(db)
+                .map(item => (item && item.code) ? String(item.code).toUpperCase().trim() : '')
+                .filter(Boolean);
+
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let sku;
+            do {
+                let letterPart = '';
+                for (let i = 0; i < 3; i++) {
+                    letterPart += letters.charAt(Math.floor(Math.random() * letters.length));
+                }
+                const numberPart = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+                sku = letterPart + numberPart;
+            } while (existingCodes.includes(sku));
+
+            return sku;
+        }
+
+        function viewProductDetail(trackingNo) {
+            switchTab('client');
+            document.getElementById('backToAdminContainer').classList.remove('hidden');
+            document.getElementById('trackingInput').value = trackingNo;
+            searchTracking();
+        }
+
+        // ===================================================================
+        // สแกนบาร์โค้ดด้วยกล้อง (เพิ่มใหม่ - ขั้นตอนที่ 6)
+        // ค้นหาสินค้าจาก "รหัสสินค้า (SKU / code)" ที่อ่านได้จากบาร์โค้ด
+        // ไม่กระทบระบบ QR Code เดิม (QR ยังสแกนผ่านกล้องมือถือทั่วไปได้ตามปกติ)
+        // ===================================================================
+        let barcodeScannerInstance = null;
+
+        function openBarcodeScanner() {
+            const modal = document.getElementById('barcodeScannerModal');
+            const statusEl = document.getElementById('barcodeScannerStatus');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            statusEl.innerText = 'กำลังขอสิทธิ์ใช้งานกล้อง...';
+
+            if (typeof Html5Qrcode === 'undefined') {
+                statusEl.innerText = 'ไม่สามารถโหลดตัวสแกนได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต';
+                return;
+            }
+
+            barcodeScannerInstance = new Html5Qrcode('barcodeScannerRegion');
+
+            barcodeScannerInstance.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: { width: 250, height: 120 } },
+                onBarcodeScanSuccess,
+                () => { /* ยังไม่เจอบาร์โค้ดในเฟรมนี้ ไม่ต้องทำอะไร รอเฟรมถัดไป */ }
+            ).then(() => {
+                statusEl.innerText = 'เล็งกล้องไปที่บาร์โค้ดสินค้า';
+            }).catch((err) => {
+                console.error('เปิดกล้องไม่สำเร็จ:', err);
+                statusEl.innerText = 'ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตการใช้งานกล้อง หรืออุปกรณ์นี้ไม่รองรับกล้อง';
+            });
+        }
+
+        function closeBarcodeScanner() {
+            const modal = document.getElementById('barcodeScannerModal');
+            if (barcodeScannerInstance) {
+                barcodeScannerInstance.stop().then(() => {
+                    barcodeScannerInstance.clear();
+                    barcodeScannerInstance = null;
+                }).catch(() => {
+                    barcodeScannerInstance = null;
+                });
+            }
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function onBarcodeScanSuccess(decodedText) {
+            const code = String(decodedText || '').trim().toUpperCase();
+            const db = getDatabase();
+
+            let foundTrackingNo = null;
+            for (const trackingNo in db) {
+                if (db[trackingNo] && String(db[trackingNo].code || '').toUpperCase() === code) {
+                    foundTrackingNo = trackingNo;
+                    break;
+                }
+            }
+
+            closeBarcodeScanner();
+
+            if (foundTrackingNo) {
+                viewProductDetail(foundTrackingNo);
+            } else {
+                alert('ไม่พบสินค้านี้ในระบบ\n\nรหัสที่อ่านได้: ' + code);
+            }
+        }
+
+        function goBackToAdmin() {
+            switchTab('admin');
+        }
+
+        function searchTracking() {
+            const inputVal = document.getElementById('trackingInput').value.trim().toUpperCase();
+            const db = getDatabase();
+            const resultSection = document.getElementById('resultSection');
+            const errorSection = document.getElementById('errorSection');
+
+            resultSection.classList.add('hidden');
+            errorSection.classList.add('hidden');
+
+            if (db[inputVal]) {
+                const item = db[inputVal];
+                document.getElementById('resTrackingNo').innerText = inputVal;
+
+                document.getElementById('resProductName').innerText = item.name || 'ไม่ระบุชื่อสินค้า';
+                document.getElementById('resProductCode').innerText = item.code || '-';
+                document.getElementById('resProductCategory').innerText = item.category || '-';
+                document.getElementById('resProductLocation').innerText = item.location || '-';
+                document.getElementById('resProductQty').innerText = item.qty !== undefined && item.qty !== "" ? item.qty : '-';
+                document.getElementById('resProductUnit').innerText = item.unit || '-';
+                document.getElementById('resProductCreated').innerText = item.created || '-';
+                document.getElementById('resProductUpdated').innerText = item.updated || '-';
+
+                updateTimeline(item.status);
+                resultSection.classList.remove('hidden');
+            } else {
+                errorSection.classList.remove('hidden');
+            }
+        }
+
+        function updateTimeline(currentStatus) {
+            for (let i = 1; i <= 4; i++) {
+                const stepElement = document.querySelector(`#step${i} div:first-child`);
+                
+                if (currentStatus === 4) {
+                    if (i === 4) {
+                        stepElement.className = "w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white transition-all";
+                    } else {
+                        stepElement.className = "w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white transition-all";
+                    }
+                } else {
+                    if (i <= currentStatus) {
+                        stepElement.className = "w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white transition-all";
+                    } else {
+                        stepElement.className = "w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center z-10 text-xs font-bold ring-4 ring-white transition-all";
+                    }
+                }
+            }
+        }
+
+        function loadAdminData() {
+            const db = getDatabase();
+            const tbody = document.getElementById('adminParcelTable');
+            tbody.innerHTML = '';
+            
+            const searchKeyword = document.getElementById('adminSearchBox').value.trim().toLowerCase();
+            const filterStatusVal = document.getElementById('adminFilterStatus').value;
+
+            const statusNames = { 
+                1: "รอรับเข้า", 
+                2: "จัดเก็บแล้ว", 
+                3: "พร้อมจัดส่ง", 
+                4: "ต้องตรวจสอบ" 
+            };
+
+            const statusColors = {
+                1: "bg-amber-100 text-amber-700",
+                2: "bg-blue-100 text-blue-700",
+                3: "bg-green-100 text-green-700",
+                4: "bg-red-100 text-red-700"
+            };
+
+            let total = 0, waiting = 0, stored = 0, shipping = 0, checking = 0;
+            let entries = Object.entries(db);
+
+            entries.forEach(([key, val]) => {
+                total++;
+                if (val.status === 1) waiting++;
+                else if (val.status === 2) stored++;
+                else if (val.status === 3) shipping++;
+                else if (val.status === 4) checking++;
+            });
+
+            if (searchKeyword) {
+                entries = entries.filter(([key, val]) => {
+                    const matchKey = key.toLowerCase().includes(searchKeyword);
+                    const matchName = val.name && val.name.toLowerCase().includes(searchKeyword);
+                    const matchCode = val.code && val.code.toLowerCase().includes(searchKeyword);
+                    return matchKey || matchName || matchCode;
+                });
+            }
+
+            if (filterStatusVal) {
+                entries = entries.filter(([key, val]) => val.status == filterStatusVal);
+            }
+
+            // จัดเรียงให้สินค้าล่าสุดขึ้นก่อน
+            entries.sort((a, b) => {
+                const timeA = a[1].timestamp || 0;
+                const timeB = b[1].timestamp || 0;
+                return timeB - timeA;
+            });
+
+            if (entries.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-6 text-slate-400 text-xs">ไม่พบรายการพัสดุที่ตรงกับการค้นหา</td></tr>`;
+            }
+
+            entries.forEach(([key, val]) => {
+                const btn1 = val.status === 1 ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-300' : 'bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700';
+                const btn2 = val.status === 2 ? 'bg-blue-500 text-white shadow-sm ring-2 ring-blue-300' : 'bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700';
+                const btn3 = val.status === 3 ? 'bg-emerald-500 text-white shadow-sm ring-2 ring-emerald-300' : 'bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700';
+                const btn4 = val.status === 4 ? 'bg-red-500 text-white shadow-sm ring-2 ring-red-300' : 'bg-slate-100 text-slate-600 hover:bg-red-100 hover:text-red-700';
+
+                const productDesc = val.name ? `<div class="text-xs text-slate-500 mt-0.5">📦 ${val.name} (${val.code || '-'}) | โซน: ${val.location || '-'}</div>` : '';
+
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-50 hover:bg-slate-50/80 transition">
+                        <td class="py-3.5 text-center"><input type="checkbox" class="rowCheckbox rounded border-slate-300" value="${key}" onclick="checkSelectedCount()"></td>
+                        <td class="py-3.5">
+                            <div class="font-semibold text-indigo-600 cursor-pointer hover:underline inline-block" onclick="viewProductDetail('${key}')">${key}</div>
+                            ${productDesc}
+                        </td>
+                        <td class="py-3.5">
+                            <span class="px-3 py-1 text-xs rounded-full font-medium ${statusColors[val.status]}">
+                                ${statusNames[val.status]}
+                            </span>
+                        </td>
+                        <td class="py-3.5 text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                <button onclick="viewProductDetail('${key}')" class="px-2 py-1 text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-medium transition" title="ดูรายละเอียดสินค้า">
+                                    🔍 ดู
+                                </button>
+                                <button onclick="openEditParcelModal('${key}')" class="px-2 py-1 text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-xl font-medium transition" title="แก้ไขข้อมูลสินค้า">
+                                    ✏️ แก้ไข
+                                </button>
+                                <button onclick="openStickerModal('${key}')" class="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl font-medium transition" title="พิมพ์ QR Code">
+                                    🖨️ QR
+                                </button>
+                                <button onclick="deleteSingleParcel('${key}')" class="px-2 py-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded-xl font-medium transition" title="ลบรายการนี้">
+                                    🗑️ ลบ
+                                </button>
+                            </div>
+                        </td>
+                        <td class="py-3.5 text-right">
+                            <div class="inline-flex bg-slate-100 p-1 rounded-xl gap-1 flex-wrap justify-end">
+                                <button onclick="updateStatus('${key}', 1)" class="px-2 py-1 text-[11px] rounded-lg font-medium transition duration-200 ${btn1}">รอรับเข้า</button>
+                                <button onclick="updateStatus('${key}', 2)" class="px-2 py-1 text-[11px] rounded-lg font-medium transition duration-200 ${btn2}">จัดเก็บแล้ว</button>
+                                <button onclick="updateStatus('${key}', 3)" class="px-2 py-1 text-[11px] rounded-lg font-medium transition duration-200 ${btn3}">พร้อมจัดส่ง</button>
+                                <button onclick="updateStatus('${key}', 4)" class="px-2 py-1 text-[11px] rounded-lg font-medium transition duration-200 ${btn4}">ต้องตรวจสอบ</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('statTotal').innerText = total;
+            document.getElementById('statWaiting').innerText = waiting;
+            document.getElementById('statStored').innerText = stored;
+            document.getElementById('statShipping').innerText = shipping;
+            document.getElementById('statCheck').innerText = checking;
+            checkSelectedCount();
+        }
+
+        function toggleSelectAll(master) {
+            const checkboxes = document.querySelectorAll('.rowCheckbox');
+            checkboxes.forEach(cb => cb.checked = master.checked);
+            checkSelectedCount();
+        }
+
+        function checkSelectedCount() {
+            const checkedBoxes = document.querySelectorAll('.rowCheckbox:checked');
+            const btnBulkPrint = document.getElementById('btnBulkPrint');
+            const btnBulkDelete = document.getElementById('btnBulkDelete');
+
+            if (checkedBoxes.length > 0) {
+                btnBulkPrint.classList.remove('hidden');
+                btnBulkPrint.innerText = `🖨️ พิมพ์สติกเกอร์ที่เลือก (${checkedBoxes.length})`;
+
+                btnBulkDelete.classList.remove('hidden');
+                btnBulkDelete.innerText = `🗑️ ลบที่เลือก (${checkedBoxes.length})`;
+            } else {
+                btnBulkPrint.classList.add('hidden');
+                btnBulkDelete.classList.add('hidden');
+            }
+        }
+
+        function deleteSingleParcel(trackingNo) {
+            if (confirm(`คุณต้องการลบพัสดุหมายเลข ${trackingNo} ใช่หรือไม่?`)) {
+                const db = getDatabase();
+                if (db[trackingNo]) {
+                    delete db[trackingNo];
+                    saveDatabase(db);
+                    loadAdminData();
+                }
+            }
+        }
+
+        function deleteSelectedParcels() {
+            const checkedBoxes = document.querySelectorAll('.rowCheckbox:checked');
+            if (checkedBoxes.length === 0) return;
+
+            if (confirm(`คุณต้องการลบรายการพัสดุที่เลือกจำนวน ${checkedBoxes.length} รายการ ใช่หรือไม่?`)) {
+                const db = getDatabase();
+                checkedBoxes.forEach(cb => {
+                    const trackingNo = cb.value;
+                    if (db[trackingNo]) {
+                        delete db[trackingNo];
+                    }
+                });
+                saveDatabase(db);
+                document.getElementById('selectAll').checked = false;
+                loadAdminData();
+            }
+        }
+
+        function addNewRandomParcel() {
+            const db = getDatabase();
+            let randomCode;
+            do {
+                const randomNum = Math.floor(1000 + Math.random() * 9000);
+                randomCode = "LF" + randomNum;
+            } while (db[randomCode]);
+
+            const isDetailActive = document.getElementById('toggleDetailCheckbox').checked;
+            let name = "", code = "", category = "", location = "", qty = "", unit = "", customCreated = "", status = 1;
+
+            if (isDetailActive) {
+                name = document.getElementById('inputProductName').value.trim();
+                code = document.getElementById('inputProductCode').value.trim();
+                category = document.getElementById('inputProductCategory').value.trim();
+                if (category === 'อื่นๆ') {
+                    const otherCategory = document.getElementById('inputProductCategoryOther').value.trim();
+                    category = otherCategory !== '' ? otherCategory : 'อื่นๆ';
+                }
+                location = document.getElementById('inputProductLocation').value.trim();
+                qty = document.getElementById('inputProductQty').value.trim();
+                unit = document.getElementById('inputProductUnit').value.trim();
+                customCreated = document.getElementById('inputProductCreated').value.trim();
+                status = Number(document.getElementById('inputProductStatus').value) || 1;
+            }
+
+            const currentDateTime = getCurrentDateTime();
+            const finalCreated = customCreated !== "" ? customCreated : currentDateTime;
+            const nowTimestamp = Date.now();
+
+            db[randomCode] = { 
+                status: status, 
+                name: name, 
+                code: code, 
+                category: category, 
+                location: location, 
+                qty: qty, 
+                unit: unit,
+                timestamp: nowTimestamp,
+                created: finalCreated,
+                updated: currentDateTime
+            };
+
+            saveDatabase(db);
+
+            document.getElementById('toggleDetailCheckbox').checked = false;
+            toggleDetailForm();
+
+            loadAdminData();
+        }
+
+        function updateStatus(trackingNo, newStatus) {
+            const db = getDatabase();
+            if (db[trackingNo]) {
+                db[trackingNo].status = newStatus;
+                db[trackingNo].updated = getCurrentDateTime();
+                saveDatabase(db);
+                loadAdminData();
+            }
+        }
+
+        function openStickerModal(trackingNo) {
+            const db = getDatabase();
+            const item = db[trackingNo];
+
+            document.getElementById('stickerTrackingNo').innerText = trackingNo;
+            document.getElementById('stickerTrackingNoB').innerText = trackingNo;
+
+            const stickerDetails = document.getElementById('stickerProductDetails');
+            if (item && (item.name || item.code)) {
+                document.getElementById('stkProductName').innerText = item.name ? item.name : 'สินค้าทั่วไป';
+                document.getElementById('stkProductCode').innerText = `รหัส: ${item.code || '-'}`;
+                document.getElementById('stkProductLoc').innerText = `ตำแหน่ง: ${item.location || '-'}`;
+                stickerDetails.classList.remove('hidden');
+            } else {
+                stickerDetails.classList.add('hidden');
+            }
+
+            // เติมข้อมูลตาราง (แบบที่ 2)
+            document.getElementById('stkTblName').innerText = (item && item.name) ? item.name : '-';
+            document.getElementById('stkTblCode').innerText = (item && item.code) ? item.code : '-';
+            document.getElementById('stkTblLoc').innerText = (item && item.location) ? item.location : '-';
+            document.getElementById('stkTblQty').innerText = item ? `${item.qty || '-'} ${item.unit || ''}`.trim() : '-';
+
+            const baseUrl = window.location.href.split('?')[0];
+            const targetUrl = `${baseUrl}?track=${trackingNo}`;
+
+            document.getElementById('stickerQrcode').innerHTML = "";
+            new QRCode(document.getElementById("stickerQrcode"), { text: targetUrl, width: 220, height: 220 });
+
+            document.getElementById('stickerQrcodeB').innerHTML = "";
+            new QRCode(document.getElementById("stickerQrcodeB"), { text: targetUrl, width: 160, height: 160 });
+
+            // สร้าง Barcode จากรหัสสินค้า (SKU) — แสดงเฉพาะสินค้าที่มีรหัส SKU เท่านั้น
+            // ไม่กระทบ QR Code เดิม (QR ยังอ้างอิง trackingNo เหมือนเดิมทุกประการ)
+            const barcodeWrapperA = document.getElementById('stickerBarcodeWrapper');
+            const barcodeWrapperB = document.getElementById('stickerBarcodeWrapperB');
+            if (item && item.code) {
+                try {
+                    JsBarcode("#stickerBarcode", item.code, { format: "CODE128", width: 2, height: 45, fontSize: 13, margin: 0 });
+                    JsBarcode("#stickerBarcodeB", item.code, { format: "CODE128", width: 1.4, height: 32, fontSize: 10, margin: 0 });
+                    barcodeWrapperA.classList.remove('hidden');
+                    barcodeWrapperB.classList.remove('hidden');
+                } catch (e) {
+                    console.error('สร้าง Barcode ไม่สำเร็จ:', e);
+                    barcodeWrapperA.classList.add('hidden');
+                    barcodeWrapperB.classList.add('hidden');
+                }
+            } else {
+                barcodeWrapperA.classList.add('hidden');
+                barcodeWrapperB.classList.add('hidden');
+            }
+
+            setStickerLayoutMode(stickerLayoutMode);
+
+            const modal = document.getElementById('printStickerModal');
+            modal.classList.remove('hidden');
+        }
+
+        function closeStickerModal() {
+            const modal = document.getElementById('printStickerModal');
+            modal.classList.add('hidden');
+        }
+
+        // ===================================================================
+        // สลับรูปแบบสติกเกอร์ที่จะพิมพ์: 'qr-only' หรือ 'qr-table' (เพิ่มใหม่)
+        // ใช้ร่วมกันทั้ง modal พิมพ์เดี่ยว และปุ่มพิมพ์รวมหลายชิ้น (bulk)
+        // ===================================================================
+        let stickerLayoutMode = 'qr-only';
+
+        function setStickerLayoutMode(mode) {
+            stickerLayoutMode = mode;
+
+            const activeClasses = ['bg-indigo-600', 'text-white'];
+            const inactiveClasses = ['bg-white', 'text-slate-500'];
+
+            const applyButtonState = (btn, isActive) => {
+                if (!btn) return;
+                btn.classList.remove(...activeClasses, ...inactiveClasses);
+                btn.classList.add(...(isActive ? activeClasses : inactiveClasses));
+            };
+
+            // อัปเดตปุ่มใน modal พิมพ์เดี่ยว
+            applyButtonState(document.getElementById('layoutBtnQrOnlyModal'), mode === 'qr-only');
+            applyButtonState(document.getElementById('layoutBtnQrTableModal'), mode === 'qr-table');
+
+            // อัปเดตปุ่มใน toolbar พิมพ์รวมหลายชิ้น
+            applyButtonState(document.getElementById('layoutBtnQrOnlyBulk'), mode === 'qr-only');
+            applyButtonState(document.getElementById('layoutBtnQrTableBulk'), mode === 'qr-table');
+
+            // สลับ layout ที่แสดงใน modal พิมพ์เดี่ยว (ถ้ามีอยู่ในหน้า)
+            const layoutA = document.getElementById('stickerLayoutA');
+            const layoutB = document.getElementById('stickerLayoutB');
+            if (layoutA && layoutB) {
+                if (mode === 'qr-table') {
+                    layoutA.classList.add('hidden');
+                    layoutB.classList.remove('hidden');
+                } else {
+                    layoutB.classList.add('hidden');
+                    layoutA.classList.remove('hidden');
+                }
+            }
+        }
+
+        // ===================================================================
+        // แก้ไขข้อมูลสินค้า (เพิ่มใหม่)
+        // ===================================================================
+
+        let editingTrackingNo = null;
+
+        function openEditParcelModal(trackingNo) {
+            const db = getDatabase();
+            const item = db[trackingNo];
+            if (!item) return;
+
+            editingTrackingNo = trackingNo;
+
+            document.getElementById('editParcelTrackingNo').innerText = trackingNo;
+            document.getElementById('editInputName').value = item.name || '';
+            document.getElementById('editInputCode').value = item.code || '';
+            document.getElementById('editInputCategory').value = item.category || '';
+            document.getElementById('editInputLocation').value = item.location || '';
+            document.getElementById('editInputQty').value = item.qty || '';
+            document.getElementById('editInputUnit').value = item.unit || '';
+
+            const modal = document.getElementById('editParcelModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditParcelModal() {
+            const modal = document.getElementById('editParcelModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            editingTrackingNo = null;
+        }
+
+        function saveEditedParcel(event) {
+            event.preventDefault();
+            if (!editingTrackingNo) return;
+
+            const db = getDatabase();
+            const item = db[editingTrackingNo];
+            if (!item) {
+                closeEditParcelModal();
+                return;
+            }
+
+            item.name = document.getElementById('editInputName').value.trim();
+            item.code = document.getElementById('editInputCode').value.trim();
+            item.category = document.getElementById('editInputCategory').value.trim();
+            item.location = document.getElementById('editInputLocation').value.trim();
+            item.qty = document.getElementById('editInputQty').value.trim();
+            item.unit = document.getElementById('editInputUnit').value.trim();
+            item.updated = getCurrentDateTime();
+
+            saveDatabase(db);
+            closeEditParcelModal();
+            loadAdminData();
+        }
+
+        function openBulkPrintModal() {
+            const checkedBoxes = document.querySelectorAll('.rowCheckbox:checked');
+            if (checkedBoxes.length === 0) return;
+
+            const db = getDatabase();
+            const container = document.getElementById('multiPrintContainer');
+            container.innerHTML = '';
+
+            const baseUrl = window.location.href.split('?')[0];
+            const useTableLayout = (stickerLayoutMode === 'qr-table');
+
+            checkedBoxes.forEach(cb => {
+                const trackingNo = cb.value;
+                const item = db[trackingNo];
+                const targetUrl = `${baseUrl}?track=${trackingNo}`;
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'sticker-item';
+
+                if (useTableLayout) {
+                    // แบบที่ 2: QR ซ้าย + ข้อมูลเป็นตารางขวา (เพิ่มใหม่)
+                    itemDiv.innerHTML = `
+                        <div style="border-bottom: 1.5px dashed #666; padding-bottom: 3px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: baseline;">
+                            <span style="font-size: 8px; font-weight: bold; color: #555; text-transform: uppercase;">LogisticsFlow</span>
+                            <span style="font-size: 14px; font-weight: 900; color: #000;">${trackingNo}</span>
+                        </div>
+                        <div style="display: flex; gap: 6px; align-items: stretch; text-align: left;">
+                            <div id="qrcode_${trackingNo}" style="flex-shrink: 0; display: flex; align-items: center; justify-content: center;"></div>
+                            <table style="border-collapse: collapse; flex-grow: 1; font-size: 8px;">
+                                <tbody>
+                                    <tr><td style="border: 1px solid #999; padding: 2px 4px; background: #f8f8f8; color: #666; white-space: nowrap;">ชื่อสินค้า</td><td style="border: 1px solid #999; padding: 2px 4px; font-weight: 600;">${(item && item.name) ? item.name : '-'}</td></tr>
+                                    <tr><td style="border: 1px solid #999; padding: 2px 4px; background: #f8f8f8; color: #666; white-space: nowrap;">รหัส SKU</td><td style="border: 1px solid #999; padding: 2px 4px; font-weight: 600;">${(item && item.code) ? item.code : '-'}</td></tr>
+                                    <tr><td style="border: 1px solid #999; padding: 2px 4px; background: #f8f8f8; color: #666; white-space: nowrap;">โซนเก็บ</td><td style="border: 1px solid #999; padding: 2px 4px; font-weight: 600;">${(item && item.location) ? item.location : '-'}</td></tr>
+                                    <tr><td style="border: 1px solid #999; padding: 2px 4px; background: #f8f8f8; color: #666; white-space: nowrap;">จำนวน</td><td style="border: 1px solid #999; padding: 2px 4px; font-weight: 600;">${item ? `${item.qty || '-'} ${item.unit || ''}`.trim() : '-'}</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        ${(item && item.code) ? `<div style="display: flex; justify-content: center; margin: 3px 0;"><svg id="barcode_${trackingNo}"></svg></div>` : ''}
+                        <div style="border-top: 1.5px dashed #666; padding-top: 2px; margin-top: 3px; font-size: 7px; color: #666; text-align: center;">
+                            สแกนเพื่อตรวจสอบสถานะพัสดุ
+                        </div>
+                    `;
+                    container.appendChild(itemDiv);
+                    new QRCode(document.getElementById(`qrcode_${trackingNo}`), { text: targetUrl, width: 70, height: 70 });
+                    if (item && item.code) {
+                        try {
+                            JsBarcode(`#barcode_${trackingNo}`, item.code, { format: "CODE128", width: 1.3, height: 28, fontSize: 9, margin: 0 });
+                        } catch (e) {
+                            console.error('สร้าง Barcode ไม่สำเร็จ (' + trackingNo + '):', e);
+                        }
+                    }
+                } else {
+                    // แบบที่ 1: QR อย่างเดียว (แบบเดิม)
+                    let extraHtml = '';
+                    if (item && (item.name || item.code)) {
+                        extraHtml = `
+                            <div style="font-size: 10px; font-weight: bold; color: #333; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name || ''}</div>
+                            <div style="font-size: 8px; color: #555; display: flex; justify-content: space-between; margin-top: 1px;">
+                                <span>รหัส: ${item.code || '-'}</span>
+                                <span>ที่เก็บ: ${item.location || '-'}</span>
+                            </div>
+                        `;
+                    }
+
+                    itemDiv.innerHTML = `
+                        <div style="border-bottom: 1.5px dashed #666; padding-bottom: 3px; margin-bottom: 4px;">
+                            <span style="font-size: 8px; font-weight: bold; color: #555; text-transform: uppercase;">LogisticsFlow Express</span>
+                            <div style="font-size: 16px; font-weight: 900; color: #000; line-height: 1.1;">${trackingNo}</div>
+                            ${extraHtml}
+                        </div>
+                        <div id="qrcode_${trackingNo}" style="display: flex; justify-content: center; margin: 3px 0;"></div>
+                        ${(item && item.code) ? `<div style="display: flex; justify-content: center; margin: 3px 0;"><svg id="barcode_${trackingNo}"></svg></div>` : ''}
+                        <div style="border-top: 1.5px dashed #666; padding-top: 2px; margin-top: 3px; font-size: 7px; color: #666;">
+                            สแกนเพื่อตรวจสอบสถานะพัสดุ
+                        </div>
+                    `;
+                    container.appendChild(itemDiv);
+                    new QRCode(document.getElementById(`qrcode_${trackingNo}`), { text: targetUrl, width: 90, height: 90 });
+                    if (item && item.code) {
+                        try {
+                            JsBarcode(`#barcode_${trackingNo}`, item.code, { format: "CODE128", width: 1.5, height: 32, fontSize: 10, margin: 0 });
+                        } catch (e) {
+                            console.error('สร้าง Barcode ไม่สำเร็จ (' + trackingNo + '):', e);
+                        }
+                    }
+                }
+            });
+
+            setTimeout(() => {
+                window.print();
+            }, 300);
+        }
+    </script>
+</body>
+</html>
